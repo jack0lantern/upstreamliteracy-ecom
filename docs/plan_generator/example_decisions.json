@@ -1,0 +1,26 @@
+{
+  "backend_framework": {
+    "resolution": "FastAPI",
+    "rationale": "Async-native, excellent OpenAPI support, strong typing with Pydantic"
+  },
+  "frontend_framework": {
+    "resolution": "Next.js",
+    "rationale": "SSR/SSG support, React ecosystem, Vercel deployment"
+  },
+  "database": {
+    "resolution": "PostgreSQL",
+    "rationale": "ACID compliance, JSON support, mature ecosystem"
+  },
+  "api_style": {
+    "resolution": "REST with OpenAPI",
+    "rationale": "Broad client compatibility, auto-generated docs and SDKs"
+  },
+  "auth_strategy": {
+    "resolution": "JWT with refresh tokens",
+    "rationale": "Stateless auth, works well with microservices"
+  },
+  "infra": {
+    "resolution": "Docker Compose (local) + Kubernetes (prod)",
+    "rationale": "Local dev simplicity with production-grade orchestration"
+  }
+}
