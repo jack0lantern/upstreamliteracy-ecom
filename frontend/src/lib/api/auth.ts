@@ -30,8 +30,14 @@ export const authApi = {
   },
 
   login: async (data: LoginPayload): Promise<LoginResponse> => {
-    const response = await apiClient.post<LoginResponse>('/auth/login/', data);
-    return response.data;
+    const response = await apiClient.post<{ access: string; user: AuthUser }>('/auth/login/', data);
+    return {
+      user: response.data.user,
+      tokens: {
+        access: response.data.access,
+        refresh: '', // refresh token is delivered via httpOnly cookie
+      },
+    };
   },
 
   logout: async (refreshToken: string): Promise<void> => {

@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 
@@ -9,11 +10,11 @@ class IsVerifiedUser(BasePermission):
     message = "Email verification is required to access this resource."
 
     def has_permission(self, request, view):
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.is_verified
-        )
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if not settings.REQUIRE_EMAIL_VERIFICATION:
+            return True
+        return bool(request.user.is_verified)
 
 
 class IsOwnerOrAdmin(BasePermission):

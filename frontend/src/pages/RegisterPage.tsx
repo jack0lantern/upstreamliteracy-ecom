@@ -40,9 +40,10 @@ export default function RegisterPage() {
 
   const mutation = useMutation({
     mutationFn: (data: Omit<FormValues, 'confirm_password'>) => authApi.register(data),
-    onSuccess: () => {
+    onSuccess: (data) => {
       addToast(
-        'Account created! Please check your email to verify your address.',
+        data.message ??
+          'Account created! Please check your email to verify your address.',
         'success',
       );
       navigate('/login');

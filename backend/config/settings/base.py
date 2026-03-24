@@ -14,6 +14,7 @@ env = environ.Env(
     ALLOWED_HOSTS=(list, ["*"]),
     CORS_ALLOWED_ORIGINS=(list, []),
     DEFAULT_FROM_EMAIL=(str, "Upstream Literacy <noreply@upstreamliteracy.com>"),
+
 )
 
 # Read .env file if present
@@ -212,6 +213,9 @@ STORAGES = {
 # ---------------------------------------------------------------------------
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL")
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# When False, new users are marked verified immediately; login and IsVerifiedUser do not require verification.
+REQUIRE_EMAIL_VERIFICATION = env.bool("REQUIRE_EMAIL_VERIFICATION", default=False)
 
 # ---------------------------------------------------------------------------
 # Throttle scopes (used by accounts/throttles.py)

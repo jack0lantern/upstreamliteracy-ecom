@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.utils.translation import gettext_lazy as _
@@ -65,7 +66,7 @@ class LoginSerializer(serializers.Serializer):
                 {"non_field_errors": [_("This account has been deactivated.")]},
                 code="authorization",
             )
-        if not user.is_verified:
+        if settings.REQUIRE_EMAIL_VERIFICATION and not user.is_verified:
             raise serializers.ValidationError(
                 {"non_field_errors": [_("Please verify your email address before signing in.")]},
                 code="email_not_verified",

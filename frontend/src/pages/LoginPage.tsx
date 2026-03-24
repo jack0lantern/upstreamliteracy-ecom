@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
 import { authApi } from '@/lib/api/auth';
 import { useAuthStore } from '@/stores/authStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -23,6 +24,7 @@ export default function LoginPage() {
 
   const setAuth = useAuthStore((s) => s.setAuth);
   const addToast = useUIStore((s) => s.addToast);
+  const [emailUnverified, setEmailUnverified] = useState(false);
 
   const {
     register,
@@ -31,8 +33,15 @@ export default function LoginPage() {
     setError,
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
+  const resendMutation = useMutation({
+    mutationFn: (email: string) => authApi.resendVerification(email),
+    onSuccess: () => addToast('Verification email sent! Check your inbox.', 'success'),
+    onError: () => addToast('Failed to resend. Please try again.', 'error'),
+  });
+
   const mutation = useMutation({
     mutationFn: authApi.login,
+    onMutate: () => setEmailUnverified(false),
     onSuccess: ({ user, tokens }) => {
       setAuth(user, tokens);
       identifyUser(user.id, { email: user.email });
@@ -40,11 +49,17 @@ export default function LoginPage() {
       navigate(nextPath, { replace: true });
     },
     onError: (err: unknown) => {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 401) {
+      const response = (err as { response?: { status?: number; data?: { error?: { code?: string; field_errors?: Record<string, string[]> } } } })?.response;
+      const status = response?.status;
+      const errorCode = response?.data?.error?.code;
+      const fieldErrors = response?.data?.error?.field_errors;
+
+      if (errorCode === 'email_not_verified' || fieldErrors?.non_field_errors?.[0]?.includes('verify')) {
+        setEmailUnverified(true);
+      } else if (status === 400 && fieldErrors?.non_field_errors?.[0]) {
+        setError('password', { message: fieldErrors.non_field_errors[0] });
+      } else if (status === 401) {
         setError('password', { message: 'Invalid email or password.' });
-      } else {
-        addToast('Login failed. Please try again.', 'error');
       }
     },
   });
@@ -101,7 +116,23 @@ export default function LoginPage() {
                 {errors.password && <p className="error-text">{errors.password.message}</p>}
               </div>
 
-              {mutation.isError && !errors.password && (
+              {emailUnverified && (
+                <div role="alert" className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                  <p className="font-medium">Email not verified</p>
+                  <p className="mt-1">Please check your inbox for a verification link.{' '}
+                    <button
+                      type="button"
+                      onClick={() => resendMutation.mutate(mutation.variables?.email ?? '')}
+                      disabled={resendMutation.isPending}
+                      className="underline font-medium hover:text-amber-900 disabled:opacity-50"
+                    >
+                      {resendMutation.isPending ? 'Sending…' : 'Resend email'}
+                    </button>
+                  </p>
+                </div>
+              )}
+
+              {mutation.isError && !errors.password && !emailUnverified && (
                 <div
                   role="alert"
                   className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700"

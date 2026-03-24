@@ -74,7 +74,7 @@ def _get_tokens_for_user(user: User) -> dict:
 class RegisterView(APIView):
     """
     POST /api/v1/auth/register/
-    Create a new user account, then send a verification email.
+    Create a new user account. When REQUIRE_EMAIL_VERIFICATION is True, sends a verification email.
     """
 
     permission_classes = [AllowAny]
@@ -84,34 +84,34 @@ class RegisterView(APIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        # Create e-mail verification token (24-hour expiry)
-        token = EmailVerificationToken.objects.create(
-            user=user,
-            expires_at=timezone.now() + timedelta(hours=24),
-        )
-
-        # Send verification e-mail (async in production, inline in dev)
-        verification_url = f"{settings.FRONTEND_URL if hasattr(settings, 'FRONTEND_URL') else 'http://localhost:3000'}/verify-email/{token.id}"
-        try:
-            send_transactional_email(
-                subject="Verify your Upstream Literacy account",
-                message=(
-                    f"Hi {user.first_name},\n\n"
-                    f"Please verify your email address by clicking the link below:\n\n"
-                    f"{verification_url}\n\n"
-                    "This link expires in 24 hours.\n\n"
-                    "If you did not create an account, please ignore this email."
-                ),
-                to_emails=[user.email],
+        if settings.REQUIRE_EMAIL_VERIFICATION:
+            token = EmailVerificationToken.objects.create(
+                user=user,
+                expires_at=timezone.now() + timedelta(hours=24),
             )
-        except Exception:
-            logger.exception("Failed to send verification email to %s", user.email)
+            verification_url = f"{settings.FRONTEND_URL if hasattr(settings, 'FRONTEND_URL') else 'http://localhost:3000'}/verify-email/{token.id}"
+            try:
+                send_transactional_email(
+                    subject="Verify your Upstream Literacy account",
+                    message=(
+                        f"Hi {user.first_name},\n\n"
+                        f"Please verify your email address by clicking the link below:\n\n"
+                        f"{verification_url}\n\n"
+                        "This link expires in 24 hours.\n\n"
+                        "If you did not create an account, please ignore this email."
+                    ),
+                    to_emails=[user.email],
+                )
+            except Exception:
+                logger.exception("Failed to send verification email to %s", user.email)
+            message = "Account created. Please check your email to verify your account."
+        else:
+            user.is_verified = True
+            user.save(update_fields=["is_verified"])
+            message = "Account created."
 
         return Response(
-            {
-                "message": "Account created. Please check your email to verify your account.",
-                "user": UserSerializer(user).data,
-            },
+            {"message": message, "user": UserSerializer(user).data},
             status=status.HTTP_201_CREATED,
         )
 
@@ -283,6 +283,12 @@ class ResendVerificationView(APIView):
 
     def post(self, request):
         email = request.data.get("email", "").lower().strip()
+
+        if not settings.REQUIRE_EMAIL_VERIFICATION:
+            return Response(
+                {"message": "If an account with that email exists, a new verification link has been sent."},
+                status=status.HTTP_200_OK,
+            )
 
         # Always return 200 to prevent user enumeration
         if not email:
