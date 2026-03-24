@@ -1,0 +1,11 @@
+# Backend service (GitHub deploy): build from repo root so backend/ is included.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+watchPatterns = ["backend/**"]
+
+[deploy]
+preDeployCommand = ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput"]
+healthcheckPath = "/health/"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
