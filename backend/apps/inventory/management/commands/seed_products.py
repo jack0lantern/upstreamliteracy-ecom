@@ -22,6 +22,7 @@ from apps.catalog.models import (
     SKU,
     SkillTag,
 )
+from apps.checkout.models import ShippingRate
 from apps.inventory.models import StockLevel, StockMovement
 
 
@@ -532,6 +533,9 @@ class Command(BaseCommand):
         self.stdout.write("Seeding bundle product...")
         self._seed_bundle(BUNDLE_DEFINITION, grade_cats, focus_cats, format_cats, skill_tag_map, sku_map)
 
+        self.stdout.write("Seeding shipping rates...")
+        self._seed_shipping_rates()
+
         self.stdout.write(self.style.SUCCESS("Seed complete."))
 
     # ------------------------------------------------------------------
@@ -658,6 +662,35 @@ class Command(BaseCommand):
             )
 
         return sku
+
+    def _seed_shipping_rates(self):
+        rates = [
+            {
+                "name": "Standard Shipping",
+                "flat_rate": "5.99",
+                "estimated_days_min": 3,
+                "estimated_days_max": 7,
+                "description": "Delivered in 3–7 business days via USPS.",
+                "is_active": True,
+                "sort_order": 10,
+            },
+            {
+                "name": "Expedited Shipping",
+                "flat_rate": "12.99",
+                "estimated_days_min": 1,
+                "estimated_days_max": 3,
+                "description": "Delivered in 1–3 business days via UPS.",
+                "is_active": True,
+                "sort_order": 20,
+            },
+        ]
+        for data in rates:
+            rate, created = ShippingRate.objects.get_or_create(
+                name=data["name"],
+                defaults=data,
+            )
+            verb = "Created" if created else "Exists"
+            self.stdout.write(f"  {verb}: shipping rate '{rate.name}' (${rate.flat_rate})")
 
     def _seed_bundle(self, defn, grade_cats, focus_cats, format_cats, skill_tag_map, sku_map):
         slug = slugify(defn["title"])[:255]

@@ -108,8 +108,8 @@ export interface Address {
   address_line1: string;
   address_line2: string;
   city: string;
-  state_province: string;
-  postal_code: string;
+  state: string;
+  zip_code: string;
   country: string;
   phone: string;
   is_default: boolean;
@@ -122,8 +122,8 @@ export interface AddressPayload {
   address_line1: string;
   address_line2?: string;
   city: string;
-  state_province: string;
-  postal_code: string;
+  state: string;
+  zip_code: string;
   country: string;
   phone?: string;
   is_default?: boolean;
@@ -131,11 +131,11 @@ export interface AddressPayload {
 
 // ─── Checkout ─────────────────────────────────────────────────────────────────
 
-export interface ShippingMethod {
-  id: string;
+export interface ShippingRate {
+  id: number;
   name: string;
   description: string;
-  price: string;
+  flat_rate: string;
   estimated_days_min: number;
   estimated_days_max: number;
 }
@@ -148,30 +148,39 @@ export interface TaxEstimate {
 
 export interface CheckoutRequest {
   cart_token: string;
-  contact_email: string;
-  contact_phone?: string;
+  guest_email: string;
   shipping_address: AddressPayload;
   billing_address?: AddressPayload;
   billing_same_as_shipping: boolean;
-  shipping_method_id: string;
-  payment_method_nonce: string;
-  coupon_code?: string;
+  shipping_rate_id: number;
+  stripe_payment_method_id: string;
 }
 
 export interface CheckoutSession {
-  token: string;
-  cart_token: string;
-  contact_email: string;
-  contact_phone: string;
-  shipping_address: Address | null;
-  billing_address: Address | null;
+  id: string;
+  session_token: string;
+  user: number | null;
+  guest_email: string | null;
+  current_step: string;
+  cart_snapshot: Record<string, unknown>;
+  shipping_address: AddressPayload | null;
+  billing_address: AddressPayload | null;
   billing_same_as_shipping: boolean;
-  shipping_method: ShippingMethod | null;
+  shipping_rate: number | null;
+  shipping_rate_detail: ShippingRate | null;
+  shipping_cost: string | null;
+  tax_amount: string | null;
+  tax_rate: string | null;
+  tax_exempt: boolean;
+  stripe_payment_intent_id: string | null;
   subtotal: string;
-  shipping_total: string;
-  tax_total: string;
-  grand_total: string;
-  status: 'pending' | 'processing' | 'complete' | 'failed';
+  total: string | null;
+  computed_total: string;
+  status: 'active' | 'submitted' | 'confirmed' | 'expired';
+  expires_at: string;
+  is_expired: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
@@ -215,7 +224,7 @@ export interface Order extends OrderSummary {
   contact_phone: string;
   shipping_address: Address;
   billing_address: Address;
-  shipping_method: ShippingMethod;
+  shipping_method: ShippingRate;
   tracking_number: string | null;
   tracking_url: string | null;
   notes: string;

@@ -1,16 +1,21 @@
-import { useEffect, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { checkoutApi } from '@/lib/api/checkout';
+import { paymentsApi } from '@/lib/api/payments';
 import { cartApi } from '@/lib/api/cart';
 import { queryKeys } from '@/lib/queryKeys';
 import { useCheckoutStore } from '@/stores/checkoutStore';
 import { useUIStore } from '@/stores/uiStore';
 import { trackEvent } from '@/lib/analytics';
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? '');
 
 // ─── Step indicators ──────────────────────────────────────────────────────────
 
@@ -73,7 +78,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
 // ─── Zod schemas ──────────────────────────────────────────────────────────────
 
 const contactSchema = z.object({
-  email: z.string().email('Valid email required'),
+  guest_email: z.string().email('Valid email required'),
   phone: z.string().optional(),
 });
 
@@ -83,8 +88,8 @@ const addressSchema = z.object({
   address_line1: z.string().min(1, 'Address required'),
   address_line2: z.string().optional(),
   city: z.string().min(1, 'City required'),
-  state_province: z.string().min(1, 'State required'),
-  postal_code: z.string().min(1, 'Postal code required'),
+  state: z.string().min(2, 'State required').max(2, 'Use 2-letter state code'),
+  zip_code: z.string().min(1, 'Zip code required'),
   country: z.string().min(2, 'Country required').default('US'),
 });
 
@@ -115,9 +120,9 @@ function ContactStep({ sessionToken }: { sessionToken: string }) {
       <h2 className="text-lg font-semibold text-gray-900">Contact Information</h2>
 
       <div>
-        <label htmlFor="email" className="label">Email address</label>
-        <input id="email" type="email" {...register('email')} className="input mt-1" placeholder="you@example.com" />
-        {errors.email && <p className="error-text">{errors.email.message}</p>}
+        <label htmlFor="guest_email" className="label">Email address</label>
+        <input id="guest_email" type="email" {...register('guest_email')} className="input mt-1" placeholder="you@example.com" />
+        {errors.guest_email && <p className="error-text">{errors.guest_email.message}</p>}
       </div>
 
       <div>
@@ -150,20 +155,20 @@ function ShippingStep({ sessionToken }: { sessionToken: string }) {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<AddressFormValues & { shipping_method_id: string }>({
+  } = useForm<AddressFormValues & { shipping_rate_id: string }>({
     resolver: zodResolver(
-      addressSchema.extend({ shipping_method_id: z.string().min(1, 'Select a shipping method') }),
+      addressSchema.extend({ shipping_rate_id: z.string().min(1, 'Select a shipping method') }),
     ),
   });
 
   const mutation = useMutation({
-    mutationFn: async (data: AddressFormValues & { shipping_method_id: string }) => {
-      const { shipping_method_id, ...addressData } = data;
+    mutationFn: async (data: AddressFormValues & { shipping_rate_id: string }) => {
+      const { shipping_rate_id, ...addressData } = data;
       await checkoutApi.updateAddress(sessionToken, {
         shipping_address: addressData,
         billing_same_as_shipping: true,
       });
-      await checkoutApi.updateShipping(sessionToken, { shipping_method_id });
+      await checkoutApi.updateShipping(sessionToken, { shipping_rate_id: Number(shipping_rate_id) });
     },
     onSuccess: () => nextStep(),
     onError: () => addToast('Failed to save shipping info.', 'error'),
@@ -212,14 +217,14 @@ function ShippingStep({ sessionToken }: { sessionToken: string }) {
           {errors.city && <p className="error-text">{errors.city.message}</p>}
         </div>
         <div>
-          <label htmlFor="state_province" className="label">State</label>
-          <input id="state_province" type="text" {...register('state_province')} className="input mt-1" />
-          {errors.state_province && <p className="error-text">{errors.state_province.message}</p>}
+          <label htmlFor="state" className="label">State</label>
+          <input id="state" type="text" {...register('state')} className="input mt-1" maxLength={2} placeholder="TX" />
+          {errors.state && <p className="error-text">{errors.state.message}</p>}
         </div>
         <div>
-          <label htmlFor="postal_code" className="label">Zip</label>
-          <input id="postal_code" type="text" {...register('postal_code')} className="input mt-1" />
-          {errors.postal_code && <p className="error-text">{errors.postal_code.message}</p>}
+          <label htmlFor="zip_code" className="label">Zip</label>
+          <input id="zip_code" type="text" {...register('zip_code')} className="input mt-1" placeholder="78701" />
+          {errors.zip_code && <p className="error-text">{errors.zip_code.message}</p>}
         </div>
       </div>
 
@@ -236,19 +241,19 @@ function ShippingStep({ sessionToken }: { sessionToken: string }) {
                 <input
                   type="radio"
                   value={rate.id}
-                  {...register('shipping_method_id')}
+                  {...register('shipping_rate_id')}
                   className="h-4 w-4 text-upstream-600 focus:ring-upstream-500"
                 />
                 <div className="flex-1">
                   <span className="block text-sm font-medium text-gray-900">{rate.name}</span>
                   <span className="block text-xs text-gray-500">{rate.description}</span>
                 </div>
-                <span className="text-sm font-semibold text-gray-900">${rate.price}</span>
+                <span className="text-sm font-semibold text-gray-900">${rate.flat_rate}</span>
               </label>
             ))}
           </div>
-          {errors.shipping_method_id && (
-            <p className="error-text">{errors.shipping_method_id.message as string}</p>
+          {errors.shipping_rate_id && (
+            <p className="error-text">{errors.shipping_rate_id.message as string}</p>
           )}
         </div>
       )}
@@ -267,45 +272,97 @@ function ShippingStep({ sessionToken }: { sessionToken: string }) {
 
 // ─── Step 3 – Payment ─────────────────────────────────────────────────────────
 
-function PaymentStep({ sessionToken }: { sessionToken: string }) {
+const CARD_ELEMENT_OPTIONS = {
+  style: {
+    base: {
+      fontSize: '16px',
+      color: '#1f2937',
+      '::placeholder': { color: '#9ca3af' },
+    },
+    invalid: { color: '#dc2626' },
+  },
+};
+
+function PaymentStepInner({ sessionToken }: { sessionToken: string }) {
+  const stripe = useStripe();
+  const elements = useElements();
   const addToast = useUIStore((s) => s.addToast);
   const nextStep = useCheckoutStore((s) => s.nextStep);
   const prevStep = useCheckoutStore((s) => s.prevStep);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [cardError, setCardError] = useState<string | null>(null);
 
-  const mutation = useMutation({
-    mutationFn: (nonce: string) =>
-      checkoutApi.updatePayment(sessionToken, { payment_method_nonce: nonce }),
-    onSuccess: () => nextStep(),
-    onError: () => addToast('Failed to save payment info.', 'error'),
-  });
-
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    // In production, collect tokenized nonce from Braintree / Stripe SDK
-    mutation.mutate('demo-nonce');
+    if (!stripe || !elements) return;
+
+    setIsProcessing(true);
+    setCardError(null);
+
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) {
+      setIsProcessing(false);
+      return;
+    }
+
+    // Create a PaymentMethod from the card details
+    const { error, paymentMethod } = await stripe.createPaymentMethod({
+      type: 'card',
+      card: cardElement,
+    });
+
+    if (error) {
+      setCardError(error.message ?? 'Card validation failed.');
+      setIsProcessing(false);
+      return;
+    }
+
+    // Save the payment method ID to the checkout session
+    try {
+      await checkoutApi.updatePayment(sessionToken, {
+        stripe_payment_method_id: paymentMethod.id,
+      });
+      nextStep();
+    } catch {
+      addToast('Failed to save payment info.', 'error');
+    } finally {
+      setIsProcessing(false);
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <h2 className="text-lg font-semibold text-gray-900">Payment</h2>
 
-      <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm text-gray-500">
-        <p className="font-medium text-gray-700">Payment form</p>
-        <p className="mt-1">
-          Integrate Braintree or Stripe Drop-in UI here. The tokenized nonce will be sent to the
-          backend.
-        </p>
+      <div>
+        <label className="label mb-2 block">Card details</label>
+        <div className="rounded-lg border border-gray-300 bg-white px-4 py-3">
+          <CardElement options={CARD_ELEMENT_OPTIONS} onChange={(e) => setCardError(e.error?.message ?? null)} />
+        </div>
+        {cardError && <p className="error-text mt-1">{cardError}</p>}
       </div>
+
+      <p className="text-xs text-gray-400">
+        Payments are processed securely via Stripe. Your card details never touch our servers.
+      </p>
 
       <div className="flex justify-between pt-2">
         <button type="button" onClick={prevStep} className="btn-secondary">
           Back
         </button>
-        <button type="submit" disabled={mutation.isPending} className="btn-primary">
-          {mutation.isPending ? 'Saving…' : 'Review Order'}
+        <button type="submit" disabled={!stripe || isProcessing} className="btn-primary">
+          {isProcessing ? 'Processing…' : 'Review Order'}
         </button>
       </div>
     </form>
+  );
+}
+
+function PaymentStep({ sessionToken }: { sessionToken: string }) {
+  return (
+    <Elements stripe={stripePromise}>
+      <PaymentStepInner sessionToken={sessionToken} />
+    </Elements>
   );
 }
 
@@ -325,11 +382,11 @@ function ReviewStep({ sessionToken }: { sessionToken: string }) {
 
   const submitMutation = useMutation({
     mutationFn: () => checkoutApi.submitCheckout(sessionToken),
-    onSuccess: (order) => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cart.current() });
-      trackEvent('purchase', { order_number: order.order_number, total: order.grand_total });
+      trackEvent('purchase', { order_number: data.order_number });
       resetCheckout();
-      navigate(`/shop/checkout/success?order=${order.order_number}`);
+      navigate(`/shop/checkout/success?order=${data.order_number}`);
     },
     onError: () => addToast('Failed to place order. Please try again.', 'error'),
   });
@@ -346,22 +403,22 @@ function ReviewStep({ sessionToken }: { sessionToken: string }) {
         <dl className="divide-y divide-gray-100 rounded-lg border border-gray-200 text-sm">
           <div className="flex gap-4 px-4 py-3">
             <dt className="w-36 text-gray-500">Contact</dt>
-            <dd className="text-gray-900">{session.contact_email}</dd>
+            <dd className="text-gray-900">{session.guest_email}</dd>
           </div>
           {session.shipping_address && (
             <div className="flex gap-4 px-4 py-3">
               <dt className="w-36 text-gray-500">Ship to</dt>
               <dd className="text-gray-900">
                 {session.shipping_address.address_line1}, {session.shipping_address.city},{' '}
-                {session.shipping_address.state_province} {session.shipping_address.postal_code}
+                {session.shipping_address.state} {session.shipping_address.zip_code}
               </dd>
             </div>
           )}
-          {session.shipping_method && (
+          {session.shipping_rate_detail && (
             <div className="flex gap-4 px-4 py-3">
               <dt className="w-36 text-gray-500">Shipping</dt>
               <dd className="text-gray-900">
-                {session.shipping_method.name} – ${session.shipping_method.price}
+                {session.shipping_rate_detail.name} – ${session.shipping_rate_detail.flat_rate}
               </dd>
             </div>
           )}
@@ -371,15 +428,15 @@ function ReviewStep({ sessionToken }: { sessionToken: string }) {
           </div>
           <div className="flex gap-4 px-4 py-3">
             <dt className="w-36 text-gray-500">Shipping</dt>
-            <dd className="text-gray-900">${session.shipping_total}</dd>
+            <dd className="text-gray-900">${session.shipping_cost ?? '0.00'}</dd>
           </div>
           <div className="flex gap-4 px-4 py-3">
             <dt className="w-36 text-gray-500">Tax</dt>
-            <dd className="text-gray-900">${session.tax_total}</dd>
+            <dd className="text-gray-900">${session.tax_amount ?? '0.00'}</dd>
           </div>
           <div className="flex gap-4 px-4 py-3 font-semibold">
             <dt className="w-36 text-gray-700">Total</dt>
-            <dd className="text-gray-900">${session.grand_total}</dd>
+            <dd className="text-gray-900">${session.computed_total}</dd>
           </div>
         </dl>
       )}
@@ -417,7 +474,7 @@ export default function CheckoutLayout() {
 
   const createSessionMutation = useMutation({
     mutationFn: () => checkoutApi.createSession(cart?.token),
-    onSuccess: (session) => setSessionToken(session.token),
+    onSuccess: (session) => setSessionToken(session.session_token),
     onError: () => addToast('Could not start checkout session.', 'error'),
   });
 

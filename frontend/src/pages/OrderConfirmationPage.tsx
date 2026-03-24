@@ -137,8 +137,8 @@ export default function OrderConfirmationPage() {
                     <>, {order.shipping_address.address_line2}</>
                   )}
                   <br />
-                  {order.shipping_address.city}, {order.shipping_address.state_province}{' '}
-                  {order.shipping_address.postal_code}
+                  {order.shipping_address.city}, {order.shipping_address.state}{' '}
+                  {order.shipping_address.zip_code}
                 </address>
               </div>
             )}

@@ -2,24 +2,23 @@ import apiClient from './client';
 import type {
   CheckoutSession,
   CheckoutRequest,
-  ShippingMethod,
+  ShippingRate,
   TaxEstimate,
   AddressPayload,
   Order,
 } from '@/types';
 
 export interface ContactPayload {
-  email: string;
+  guest_email: string;
   phone?: string;
 }
 
-export interface ShippingMethodPayload {
-  shipping_method_id: string;
+export interface ShippingRatePayload {
+  shipping_rate_id: number;
 }
 
 export interface PaymentPayload {
-  payment_method_nonce: string;
-  coupon_code?: string;
+  stripe_payment_method_id: string;
 }
 
 export const checkoutApi = {
@@ -54,7 +53,7 @@ export const checkoutApi = {
     return response.data;
   },
 
-  updateShipping: async (token: string, data: ShippingMethodPayload): Promise<CheckoutSession> => {
+  updateShipping: async (token: string, data: ShippingRatePayload): Promise<CheckoutSession> => {
     const response = await apiClient.patch<CheckoutSession>(
       `/checkout/sessions/${token}/shipping/`,
       data,
@@ -70,13 +69,18 @@ export const checkoutApi = {
     return response.data;
   },
 
-  submitCheckout: async (token: string): Promise<Order> => {
-    const response = await apiClient.post<Order>(`/checkout/sessions/${token}/submit/`);
+  submitCheckout: async (token: string): Promise<{
+    order_number: string;
+    order_id: string;
+    client_secret: string;
+    guest_tracking_token: string;
+  }> => {
+    const response = await apiClient.post(`/checkout/sessions/${token}/submit/`);
     return response.data;
   },
 
-  getShippingRates: async (zip?: string): Promise<ShippingMethod[]> => {
-    const response = await apiClient.get<ShippingMethod[]>('/checkout/shipping-rates/', {
+  getShippingRates: async (zip?: string): Promise<ShippingRate[]> => {
+    const response = await apiClient.get<ShippingRate[]>('/checkout/shipping-rates/', {
       params: zip ? { postal_code: zip } : undefined,
     });
     return response.data;

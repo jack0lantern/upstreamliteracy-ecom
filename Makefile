@@ -9,9 +9,9 @@ setup:
 	docker compose run --rm backend python manage.py createsuperuser --noinput || true
 	@echo ""
 	@echo "Setup complete. Run 'make dev' to start all services."
-	@echo "  Backend:  http://localhost:8000"
+	@echo "  Backend:  http://localhost:8001"
 	@echo "  Frontend: http://localhost:5199"
-	@echo "  Admin:    http://localhost:8000/admin/"
+	@echo "  Admin:    http://localhost:8001/admin/"
 	@echo "  Login:    admin@upstream.dev / admin123!"
 
 dev:
