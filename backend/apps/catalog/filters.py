@@ -1,7 +1,9 @@
+from collections import defaultdict
+
 import django_filters
 from django.db.models import Q
 
-from .models import Product
+from .models import Category, Product
 
 
 class ProductFilter(django_filters.FilterSet):
@@ -15,7 +17,25 @@ class ProductFilter(django_filters.FilterSet):
         fields = ["product_type"]
 
     def filter_by_category_slug(self, queryset, name, value):
-        return queryset.filter(categories__slug=value)
+        """Accept comma-separated slugs. OR within a parent group, AND across groups."""
+        slugs = [s.strip() for s in value.split(",") if s.strip()]
+        if not slugs:
+            return queryset
+
+        # Look up the requested categories with their parents
+        cats = Category.objects.filter(slug__in=slugs, is_active=True).select_related("parent")
+
+        # Group by parent (None for root categories)
+        groups: dict[int | None, list[str]] = defaultdict(list)
+        for cat in cats:
+            parent_id = cat.parent_id
+            groups[parent_id].append(cat.slug)
+
+        # AND across groups: each group must match at least one slug (OR within group)
+        for _parent_id, group_slugs in groups.items():
+            queryset = queryset.filter(categories__slug__in=group_slugs)
+
+        return queryset
 
     def filter_by_skill_tag_slug(self, queryset, name, value):
         return queryset.filter(skill_tags__slug=value)

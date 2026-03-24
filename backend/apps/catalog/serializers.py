@@ -144,7 +144,15 @@ class ProductListSerializer(serializers.ModelSerializer):
         return False
 
     def get_category(self, obj):
-        cat = obj.categories.order_by("productcategory__display_order").first()
+        # Prefer format categories (under "by-format") since they are unique per
+        # product and most descriptive.  Fall back to the first category otherwise.
+        cats = list(obj.categories.select_related("parent").order_by(
+            "productcategory__display_order"
+        ))
+        format_cat = next(
+            (c for c in cats if c.parent and c.parent.slug == "by-format"), None
+        )
+        cat = format_cat or (cats[0] if cats else None)
         if not cat:
             return None
         return {"id": cat.id, "name": cat.name, "slug": cat.slug}
