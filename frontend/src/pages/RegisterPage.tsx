@@ -16,7 +16,8 @@ const schema = z
       .string()
       .min(8, 'Password must be at least 8 characters')
       .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
-      .regex(/[0-9]/, 'Must contain at least one number'),
+      .regex(/[0-9]/, 'Must contain at least one number')
+      .regex(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/, 'Must contain at least one special character'),
     confirm_password: z.string().min(1, 'Please confirm your password'),
   })
   .refine((data) => data.password === data.confirm_password, {
@@ -47,11 +48,16 @@ export default function RegisterPage() {
       navigate('/login');
     },
     onError: (err: unknown) => {
-      const apiErrors = (err as { response?: { data?: { errors?: Record<string, string[]> } } })
-        ?.response?.data?.errors;
-      if (apiErrors) {
-        Object.entries(apiErrors).forEach(([field, messages]) => {
-          setError(field as keyof FormValues, { message: messages[0] });
+      const apiError = (err as { response?: { data?: { error?: { field_errors?: Record<string, string[]> } } } })
+        ?.response?.data?.error;
+      const fieldErrors = apiError?.field_errors;
+      if (fieldErrors && Object.keys(fieldErrors).length) {
+        Object.entries(fieldErrors).forEach(([field, messages]) => {
+          if (field === 'non_field_errors') {
+            addToast(messages[0], 'error');
+          } else {
+            setError(field as keyof FormValues, { message: messages[0] });
+          }
         });
       } else {
         addToast('Registration failed. Please try again.', 'error');
@@ -135,7 +141,7 @@ export default function RegisterPage() {
                   <p className="error-text">{errors.password.message}</p>
                 ) : (
                   <p className="mt-1 text-xs text-gray-400">
-                    At least 8 characters, one uppercase, one number.
+                    At least 8 characters, one uppercase, one number, one special character.
                   </p>
                 )}
               </div>
