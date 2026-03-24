@@ -57,17 +57,17 @@ export interface ProductListItem {
   is_in_stock: boolean;
   category: { id: number; name: string; slug: string };
   short_description: string;
+  sku_count: number;
+  default_sku_id: number | null;
 }
 
 export interface ProductDetail extends ProductListItem {
   description: string;
   images: ProductImage[];
-  specs: ProductSpec[];
-  weight_grams: number | null;
-  sku_set: ProductSKU[];
+  skus: ProductSKU[];
   related_products: ProductListItem[];
-  meta_title: string;
-  meta_description: string;
+  seo_title: string;
+  seo_description: string;
   created_at: string;
   updated_at: string;
 }
@@ -75,20 +75,29 @@ export interface ProductDetail extends ProductListItem {
 export interface ProductSKU {
   id: number;
   sku_code: string;
-  attributes: Record<string, string>;
-  price: string;
-  stock_quantity: number;
-  is_available: boolean;
+  variant_label: string;
+  effective_price: string;
+  stock_status: 'in_stock' | 'low_stock' | 'out_of_stock';
+  is_active: boolean;
 }
 
 // ─── Cart ─────────────────────────────────────────────────────────────────────
 
+export interface CartItemSKU {
+  sku_code: string;
+  variant_label: string;
+  product_title: string;
+  product_slug: string;
+  primary_image_url: string;
+}
+
 export interface CartItem {
   id: number;
-  sku: ProductSKU & { product: Pick<ProductListItem, 'id' | 'slug' | 'title' | 'primary_image'> };
+  sku: CartItemSKU;
   quantity: number;
   unit_price: string;
   line_total: string;
+  max_quantity: number;
 }
 
 export interface Cart {
@@ -198,12 +207,15 @@ export enum OrderStatus {
 export interface OrderLineItem {
   id: number;
   product_title: string;
+  product_slug: string;
   sku_code: string;
   sku_attributes: Record<string, string>;
   quantity: number;
   unit_price: string;
   line_total: string;
   product_image: string | null;
+  product_image_url: string | null;
+  product_type: string;
 }
 
 export interface OrderSummary {

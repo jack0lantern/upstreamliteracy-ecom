@@ -1,5 +1,3 @@
-import json
-
 from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 from django.db.models import Count, Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
@@ -9,17 +7,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .filters import ProductFilter
-
-# #region agent log
-def _debug_log(msg: str, data: dict) -> None:
-    try:
-        import time
-        path = "/Users/jackjiang/GitHub/partner-projects/upstreamliteracy-ecom/.cursor/debug-1fad8f.log"
-        with open(path, "a") as f:
-            f.write(json.dumps({"sessionId": "1fad8f", "location": "catalog/views.py:ProductViewSet.list", "message": msg, "data": data, "hypothesisId": "H1,H3", "timestamp": int(time.time() * 1000)}) + "\n")
-    except Exception:
-        pass
-# #endregion
 from .models import Category, Product, ProductImage, SKU
 from .serializers import (
     CategorySerializer,
@@ -42,9 +29,19 @@ class CategoryViewSet(
     lookup_field = "slug"
 
     def get_queryset(self):
+        from django.db.models import Q
+
         return (
             Category.objects.filter(is_active=True)
-            .annotate(product_count=Count("products", distinct=True))
+            .annotate(
+                product_count=Count(
+                    "products", distinct=True,
+                    filter=Q(products__is_active=True),
+                ) + Count(
+                    "children__products", distinct=True,
+                    filter=Q(children__products__is_active=True),
+                )
+            )
             .prefetch_related("children")
             .order_by("display_order", "name")
         )
@@ -98,20 +95,7 @@ class ProductViewSet(
         return ProductListSerializer
 
     def list(self, request, *args, **kwargs):
-        # #region agent log
-        _debug_log("ProductViewSet.list hit", {"origin": request.headers.get("Origin", ""), "path": request.path})
-        # #endregion
-        try:
-            resp = super().list(request, *args, **kwargs)
-            # #region agent log
-            _debug_log("ProductViewSet.list success", {"status": resp.status_code, "resultCount": len(resp.data.get("results", [])) if isinstance(resp.data, dict) else "N/A"})
-            # #endregion
-            return resp
-        except Exception as e:
-            # #region agent log
-            _debug_log("ProductViewSet.list exception", {"error": str(e), "type": type(e).__name__})
-            # #endregion
-            raise
+        return super().list(request, *args, **kwargs)
 
 
 class SearchView(APIView):

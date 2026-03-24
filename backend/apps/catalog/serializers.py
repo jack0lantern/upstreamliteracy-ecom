@@ -1,3 +1,4 @@
+from django.db.models import Count
 from rest_framework import serializers
 
 from .models import Category, Product, ProductImage, SKU, SkillTag
@@ -17,9 +18,6 @@ class ProductImageSerializer(serializers.ModelSerializer):
         fields = ["id", "image", "alt_text", "is_primary", "display_order"]
 
     def get_image(self, obj):
-        request = self.context.get("request")
-        if obj.image and request:
-            return request.build_absolute_uri(obj.image.url)
         if obj.image:
             return obj.image.url
         return None
@@ -70,7 +68,11 @@ class CategorySerializer(serializers.ModelSerializer):
 
     def get_children(self, obj):
         # Only recurse one level deep to avoid N+1 on large trees
-        children = obj.children.filter(is_active=True).order_by("display_order", "name")
+        children = (
+            obj.children.filter(is_active=True)
+            .annotate(product_count=Count("products", distinct=True))
+            .order_by("display_order", "name")
+        )
         return CategorySerializer(children, many=True, context=self.context).data
 
 
@@ -88,6 +90,9 @@ class ProductListSerializer(serializers.ModelSerializer):
     compare_at_price = serializers.SerializerMethodField()
     short_description = serializers.CharField()
 
+    sku_count = serializers.SerializerMethodField()
+    default_sku_id = serializers.SerializerMethodField()
+
     class Meta:
         model = Product
         fields = [
@@ -104,19 +109,17 @@ class ProductListSerializer(serializers.ModelSerializer):
             "category",
             "short_description",
             "is_featured",
+            "sku_count",
+            "default_sku_id",
         ]
 
     def get_primary_image(self, obj):
         img = obj.primary_image
         if not img:
             return None
-        request = self.context.get("request")
-        image_url = img.image.url if img.image else None
-        if image_url and request:
-            image_url = request.build_absolute_uri(image_url)
         return {
             "id": img.id,
-            "image": image_url,
+            "image": img.image.url if img.image else None,
             "alt_text": img.alt_text or "",
             "is_primary": img.is_primary,
             "order": img.display_order,
@@ -148,6 +151,23 @@ class ProductListSerializer(serializers.ModelSerializer):
 
     def get_compare_at_price(self, obj):
         return None  # Product model has no compare_at_price; frontend accepts null
+
+    def get_sku_count(self, obj):
+        return obj.skus.filter(is_active=True).count()
+
+    def get_default_sku_id(self, obj):
+        """Return the first active in-stock SKU id, or the first active SKU id."""
+        active_skus = obj.skus.filter(is_active=True).select_related("stock_level")
+        for sku in active_skus:
+            try:
+                sl = sku.stock_level
+                if sl.is_unlimited or sl.quantity_on_hand > 0 or sl.backorder_enabled:
+                    return sku.id
+            except Exception:
+                pass
+        # Fallback to first active SKU
+        first = obj.skus.filter(is_active=True).first()
+        return first.id if first else None
 
 
 class ProductDetailSerializer(ProductListSerializer):

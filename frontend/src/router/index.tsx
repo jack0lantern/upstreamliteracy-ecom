@@ -13,6 +13,8 @@ const OrderConfirmationPage = lazy(() => import('@/pages/OrderConfirmationPage')
 const SearchResultsPage = lazy(() => import('@/pages/SearchResultsPage'));
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const RegisterPage = lazy(() => import('@/pages/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPasswordPage'));
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const AccountLayout = lazy(() => import('@/pages/account/AccountLayout'));
 const ProfilePage = lazy(() => import('@/pages/account/ProfilePage'));
 const OrderHistoryPage = lazy(() => import('@/pages/account/OrderHistoryPage'));
@@ -90,5 +92,18 @@ export const router = createBrowserRouter([
   {
     path: '/register',
     element: withSuspense(<RegisterPage />),
+  },
+  {
+    path: '/forgot-password',
+    element: withSuspense(<ForgotPasswordPage />),
+  },
+  {
+    path: '*',
+    element: (
+      <Layout />
+    ),
+    children: [
+      { path: '*', element: withSuspense(<NotFoundPage />) },
+    ],
   },
 ]);

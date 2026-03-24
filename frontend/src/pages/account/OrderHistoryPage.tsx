@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { ordersApi } from '@/lib/api/orders';
+import { cartApi } from '@/lib/api/cart';
+import { productsApi } from '@/lib/api/products';
 import { queryKeys } from '@/lib/queryKeys';
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton';
+import { useUIStore } from '@/stores/uiStore';
 import { OrderStatus, type OrderSummary } from '@/types';
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
@@ -27,7 +30,15 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   [OrderStatus.REFUNDED]: 'Refunded',
 };
 
-function OrderRow({ order }: { order: OrderSummary }) {
+function OrderRow({
+  order,
+  onReorder,
+  isReordering,
+}: {
+  order: OrderSummary;
+  onReorder: (orderNumber: string) => void;
+  isReordering: boolean;
+}) {
   const statusClass = STATUS_COLORS[order.status] ?? 'bg-gray-100 text-gray-600';
   const statusLabel = STATUS_LABEL[order.status] ?? order.status;
   const date = new Date(order.created_at).toLocaleDateString('en-US', {
@@ -67,6 +78,14 @@ function OrderRow({ order }: { order: OrderSummary }) {
       </div>
 
       <div className="mt-4 flex items-center justify-end gap-3">
+        <button
+          type="button"
+          onClick={() => onReorder(order.order_number)}
+          disabled={isReordering}
+          className="text-sm font-medium text-gray-600 hover:text-upstream-700 disabled:opacity-40"
+        >
+          {isReordering ? 'Adding...' : 'Reorder'}
+        </button>
         <Link
           to={`/shop/checkout/success?order=${order.order_number}`}
           className="text-sm font-medium text-upstream-600 hover:underline"
@@ -80,12 +99,57 @@ function OrderRow({ order }: { order: OrderSummary }) {
 
 export default function OrderHistoryPage() {
   const [page, setPage] = useState(1);
+  const [reorderingOrder, setReorderingOrder] = useState<string | null>(null);
+  const addToast = useUIStore((s) => s.addToast);
+  const openCartSidebar = useUIStore((s) => s.openCartSidebar);
+  const queryClient = useQueryClient();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: queryKeys.orders.list({ page }),
     queryFn: () => ordersApi.getOrders({ page }),
     placeholderData: keepPreviousData,
   });
+
+  const handleReorder = async (orderNumber: string) => {
+    setReorderingOrder(orderNumber);
+    try {
+      const order = await ordersApi.getOrder(orderNumber);
+      let added = 0;
+      let failed = 0;
+
+      for (const item of order.items) {
+        try {
+          // Fetch product detail to find SKU by sku_code
+          const product = await productsApi.getProduct(item.product_slug);
+          const sku = product.skus?.find((s) => s.sku_code === item.sku_code && s.is_active);
+          if (sku) {
+            await cartApi.addItem(sku.id, item.quantity);
+            added++;
+          } else {
+            failed++;
+          }
+        } catch {
+          failed++;
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: queryKeys.cart.current() });
+
+      if (added > 0 && failed === 0) {
+        addToast(`All ${added} items added to cart!`, 'success');
+        openCartSidebar();
+      } else if (added > 0) {
+        addToast(`${added} of ${added + failed} items added to cart. ${failed} unavailable.`, 'warning');
+        openCartSidebar();
+      } else {
+        addToast('Could not add any items — products may be unavailable.', 'error');
+      }
+    } catch {
+      addToast('Failed to reorder. Please try again.', 'error');
+    } finally {
+      setReorderingOrder(null);
+    }
+  };
 
   const orders = data?.results ?? [];
   const hasNextPage = !!data?.next;
@@ -140,7 +204,12 @@ export default function OrderHistoryPage() {
           <>
             <ul className="space-y-4">
               {orders.map((order) => (
-                <OrderRow key={order.id} order={order} />
+                <OrderRow
+                  key={order.id}
+                  order={order}
+                  onReorder={handleReorder}
+                  isReordering={reorderingOrder === order.order_number}
+                />
               ))}
             </ul>
 

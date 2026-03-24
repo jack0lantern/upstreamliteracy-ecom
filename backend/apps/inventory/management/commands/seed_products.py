@@ -19,6 +19,7 @@ from apps.catalog.models import (
     Category,
     Product,
     ProductCategory,
+    ProductImage,
     SKU,
     SkillTag,
 )
@@ -536,6 +537,9 @@ class Command(BaseCommand):
         self.stdout.write("Seeding shipping rates...")
         self._seed_shipping_rates()
 
+        self.stdout.write("Seeding product images...")
+        self._seed_product_images()
+
         self.stdout.write(self.style.SUCCESS("Seed complete."))
 
     # ------------------------------------------------------------------
@@ -662,6 +666,72 @@ class Command(BaseCommand):
             )
 
         return sku
+
+    def _seed_product_images(self):
+        """Download Creative Commons (Unsplash) images for every product that lacks one."""
+        import io
+        import urllib.request
+        import urllib.error
+        from django.core.files.base import ContentFile
+
+        # Mapping of SKU codes to Unsplash image URLs (Unsplash License — free for
+        # commercial and non-commercial use).
+        IMAGE_URLS = {
+            "DR-SET-A-CVC": "https://images.unsplash.com/photo-1533561304446-88a43deb6229?w=800&h=800&fit=crop",
+            "DR-SET-B-DIG": "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=800&h=800&fit=crop",
+            "DR-SET-C-VT": "https://images.unsplash.com/photo-1524578271613-d550eacf6090?w=800&h=800&fit=crop",
+            "TG-PHONICS-G1": "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800&h=800&fit=crop",
+            "TG-PHONICS-G2": "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=800&h=800&fit=crop",
+            "TG-PA-PREK-K": "https://images.unsplash.com/photo-1588072432836-e10032774350?w=800&h=800&fit=crop",
+            "WB-PHONICS-K": "https://images.unsplash.com/photo-1544776193-352d25ca82cd?w=800&h=800&fit=crop",
+            "WB-PHONICS-G1": "https://images.unsplash.com/photo-1578593139939-cccb1e98698c?w=800&h=800&fit=crop",
+            "WB-PHONICS-G2": "https://images.unsplash.com/photo-1602541975165-6ae912c931b7?w=800&h=800&fit=crop",
+            "FLASH-SIGHT-220": "https://images.unsplash.com/photo-1632571401005-458e9d244591?w=800&h=800&fit=crop",
+            "FP-FLUENCY-G1": "https://images.unsplash.com/photo-1530303388419-840456159b0d?w=800&h=800&fit=crop",
+            "FP-FLUENCY-G2": "https://images.unsplash.com/photo-1541802802036-1d572ba70147?w=800&h=800&fit=crop",
+            "VOC-BUILDER-G3": "https://images.unsplash.com/photo-1550376026-33cbee34f79e?w=800&h=800&fit=crop",
+            "COMP-TOOLKIT-35": "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=800&h=800&fit=crop",
+            "PA-CARDS-K": "https://images.unsplash.com/photo-1573868401232-cbc9cd67c731?w=800&h=800&fit=crop",
+            "POSTER-WFAM-24": "https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=800&h=800&fit=crop",
+            "DL-SCOPE-SEQ-K5": "https://images.unsplash.com/photo-1616861771635-49063a4636ed?w=800&h=800&fit=crop",
+            "DL-WARMUP-K2": "https://images.unsplash.com/photo-1560439514-0fc9d2cd5e1b?w=800&h=800&fit=crop",
+            "DL-PASSAGES-23": "https://images.unsplash.com/photo-1603406136476-85d8c3ec76a5?w=800&h=800&fit=crop",
+            "TG-MULTI-G4": "https://images.unsplash.com/photo-1534337621606-e3df5ee0e97f?w=800&h=800&fit=crop",
+            "KIT-G1-LITERACY": "https://images.unsplash.com/photo-1597831603708-71e01189ba2c?w=800&h=800&fit=crop",
+        }
+
+        for product in Product.objects.all():
+            if product.images.exists():
+                continue
+
+            # Find the SKU code for this product
+            sku = product.skus.first()
+            if not sku:
+                self.stdout.write(self.style.WARNING(f"  No SKU for '{product.title}' — skipping."))
+                continue
+
+            url = IMAGE_URLS.get(sku.sku_code)
+            if not url:
+                self.stdout.write(self.style.WARNING(f"  No image URL for SKU '{sku.sku_code}' — skipping."))
+                continue
+
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "UpstreamLiteracy/1.0"})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    image_data = resp.read()
+            except (urllib.error.URLError, OSError) as exc:
+                self.stdout.write(self.style.WARNING(f"  Failed to download image for '{product.title}': {exc}"))
+                continue
+
+            filename = f"{product.slug}.jpg"
+            pi = ProductImage(
+                product=product,
+                alt_text=product.title,
+                is_primary=True,
+                display_order=0,
+            )
+            pi.image.save(filename, ContentFile(image_data), save=True)
+            self.stdout.write(f"  Downloaded image for '{product.title}'")
 
     def _seed_shipping_rates(self):
         rates = [

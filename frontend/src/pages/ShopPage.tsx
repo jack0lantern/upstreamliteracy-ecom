@@ -1,77 +1,28 @@
 import { Helmet } from 'react-helmet-async';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { productsApi } from '@/lib/api/products';
 import { categoriesApi } from '@/lib/api/categories';
 import { queryKeys } from '@/lib/queryKeys';
 import { ProductGridSkeleton } from '@/components/ui/LoadingSkeleton';
-import type { ProductListItem } from '@/types';
+import { ProductCard } from '@/components/product/ProductCard';
+import { useAddToCart } from '@/hooks/useAddToCart';
 
-function ProductCard({ product }: { product: ProductListItem }) {
-  const imageUrl = product.primary_image?.image ?? null;
-
-  return (
-    <Link
-      to={`/shop/product/${product.slug}`}
-      className="group flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-upstream-500"
-    >
-      {/* Image */}
-      <div className="aspect-square overflow-hidden bg-gray-100">
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={product.primary_image?.alt_text || product.title}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            loading="lazy"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-gray-300">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-16 w-16"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
-              />
-            </svg>
-          </div>
-        )}
-      </div>
-
-      {/* Details */}
-      <div className="flex flex-1 flex-col p-4">
-        {product.category && (
-          <p className="text-xs font-medium uppercase tracking-wide text-upstream-600">
-            {product.category.name}
-          </p>
-        )}
-        <h3 className="mt-1 flex-1 text-sm font-semibold leading-tight text-gray-900 group-hover:text-upstream-700">
-          {product.title}
-        </h3>
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="text-base font-bold text-gray-900">${product.price}</span>
-          {product.compare_at_price && (
-            <span className="text-sm text-gray-400 line-through">${product.compare_at_price}</span>
-          )}
-        </div>
-        {!product.is_in_stock && (
-          <span className="mt-1 text-xs text-red-500">Out of stock</span>
-        )}
-      </div>
-    </Link>
-  );
-}
+const SORT_OPTIONS = [
+  { label: 'Featured', value: '' },
+  { label: 'Price: Low to High', value: 'base_price' },
+  { label: 'Price: High to Low', value: '-base_price' },
+  { label: 'Newest', value: '-created_at' },
+  { label: 'Name A–Z', value: 'title' },
+] as const;
 
 export default function ShopPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sort = searchParams.get('sort') ?? '';
+
   const { data: productsData, isLoading: productsLoading, isError } = useQuery({
-    queryKey: queryKeys.products.list(),
-    queryFn: () => productsApi.getProducts({ page_size: 24 }),
+    queryKey: queryKeys.products.list({ page_size: 24, ordering: sort || undefined }),
+    queryFn: () => productsApi.getProducts({ page_size: 24, ordering: sort || undefined }),
   });
 
   const { data: categories } = useQuery({
@@ -79,7 +30,20 @@ export default function ShopPage() {
     queryFn: categoriesApi.getCategories,
   });
 
+  const addToCart = useAddToCart();
   const products = productsData?.results ?? [];
+
+  function handleSortChange(value: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) {
+        next.set('sort', value);
+      } else {
+        next.delete('sort');
+      }
+      return next;
+    });
+  }
 
   return (
     <>
@@ -108,7 +72,7 @@ export default function ShopPage() {
                 <li>
                   <Link
                     to="/shop"
-                    className="block rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    className="block rounded px-2 py-1.5 text-sm font-medium text-upstream-700 bg-upstream-50"
                   >
                     All Products
                   </Link>
@@ -150,12 +114,33 @@ export default function ShopPage() {
               </div>
             ) : (
               <>
-                <p className="mb-4 text-sm text-gray-500">
-                  {productsData?.count ?? products.length} products
-                </p>
+                {/* Toolbar: count + sort */}
+                <div className="mb-4 flex items-center justify-between">
+                  <p className="text-sm text-gray-500">
+                    {productsData?.count ?? products.length} products
+                  </p>
+                  <select
+                    value={sort}
+                    onChange={(e) => handleSortChange(e.target.value)}
+                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 focus:border-upstream-500 focus:outline-none focus:ring-1 focus:ring-upstream-500"
+                    aria-label="Sort products"
+                  >
+                    {SORT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
                   {products.map((product) => (
-                    <ProductCard key={product.id} product={product} />
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      onQuickAdd={(skuId) => addToCart.mutate({ skuId })}
+                      isAdding={addToCart.isPending}
+                    />
                   ))}
                 </div>
               </>

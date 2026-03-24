@@ -8,18 +8,19 @@ class CartSKUSerializer(serializers.Serializer):
     sku_code = serializers.CharField()
     variant_label = serializers.CharField()
     product_title = serializers.SerializerMethodField()
+    product_slug = serializers.SerializerMethodField()
     primary_image_url = serializers.SerializerMethodField()
 
     def get_product_title(self, obj):
         return obj.product.title
 
+    def get_product_slug(self, obj):
+        return obj.product.slug
+
     def get_primary_image_url(self, obj):
         image = obj.product.primary_image
-        if image is None:
+        if image is None or not image.image:
             return ""
-        request = self.context.get("request")
-        if request:
-            return request.build_absolute_uri(image.image.url)
         return image.image.url
 
 

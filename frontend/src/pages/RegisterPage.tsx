@@ -15,9 +15,17 @@ const schema = z
     password: z
       .string()
       .min(8, 'Password must be at least 8 characters')
-      .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
-      .regex(/[0-9]/, 'Must contain at least one number')
-      .regex(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/, 'Must contain at least one special character'),
+      .superRefine((val, ctx) => {
+        if (!/[A-Z]/.test(val)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Must contain at least one uppercase letter' });
+        }
+        if (!/[0-9]/.test(val)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Must contain at least one number' });
+        }
+        if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(val)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Must contain at least one special character' });
+        }
+      }),
     confirm_password: z.string().min(1, 'Please confirm your password'),
   })
   .refine((data) => data.password === data.confirm_password, {
@@ -36,7 +44,7 @@ export default function RegisterPage() {
     handleSubmit,
     formState: { errors },
     setError,
-  } = useForm<FormValues>({ resolver: zodResolver(schema) });
+  } = useForm<FormValues>({ resolver: zodResolver(schema), criteriaMode: 'all' });
 
   const mutation = useMutation({
     mutationFn: (data: Omit<FormValues, 'confirm_password'>) => authApi.register(data),
@@ -139,7 +147,14 @@ export default function RegisterPage() {
                   className="input mt-1"
                 />
                 {errors.password ? (
-                  <p className="error-text">{errors.password.message}</p>
+                  <div className="space-y-0.5">
+                    {errors.password.message && <p className="error-text">{errors.password.message}</p>}
+                    {errors.password.types && Object.values(errors.password.types).flat().filter(Boolean).map((msg, i) => (
+                      typeof msg === 'string' && msg !== errors.password?.message
+                        ? <p key={i} className="error-text">{msg}</p>
+                        : null
+                    ))}
+                  </div>
                 ) : (
                   <p className="mt-1 text-xs text-gray-400">
                     At least 8 characters, one uppercase, one number, one special character.

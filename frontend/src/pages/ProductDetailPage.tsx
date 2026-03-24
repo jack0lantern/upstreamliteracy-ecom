@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,11 +12,25 @@ import { trackEvent } from '@/lib/analytics';
 export default function ProductDetailPage() {
   const { slug = '' } = useParams<{ slug: string }>();
   const addToast = useUIStore((s) => s.addToast);
+  const openCartSidebar = useUIStore((s) => s.openCartSidebar);
   const queryClient = useQueryClient();
 
   const [selectedSkuId, setSelectedSkuId] = useState<number | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [zoomOrigin, setZoomOrigin] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setZoomOrigin(`${x}% ${y}%`);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setZoomOrigin(null);
+  }, []);
 
   const { data: product, isLoading, isError } = useQuery({
     queryKey: queryKeys.products.detail(slug),
@@ -30,6 +44,7 @@ export default function ProductDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cart.current() });
       addToast('Added to cart!', 'success');
+      openCartSidebar();
       trackEvent('add_to_cart', {
         product_slug: slug,
         sku_id: selectedSkuId ?? undefined,
@@ -42,13 +57,13 @@ export default function ProductDetailPage() {
   });
 
   function handleAddToCart() {
-    const skus = product?.sku_set ?? [];
+    const skus = product?.skus ?? [];
     const targetSku = selectedSkuId
       ? skus.find((s) => s.id === selectedSkuId)
-      : skus.find((s) => s.is_available) ?? skus[0];
+      : skus.find((s) => s.stock_status !== 'out_of_stock') ?? skus[0];
 
     if (!targetSku) {
-      addToast('Please select a variant.', 'warning');
+      addToast('No variant available for this product.', 'warning');
       return;
     }
 
@@ -84,13 +99,15 @@ export default function ProductDetailPage() {
 
   const images = product.images?.length ? product.images : product.primary_image ? [product.primary_image] : [];
   const activeImage = images[activeImageIndex];
-  const skus = product.sku_set ?? [];
+  const skus = product.skus ?? [];
   const hasVariants = skus.length > 1;
   const currentSku = selectedSkuId
     ? skus.find((s) => s.id === selectedSkuId)
     : skus[0];
-  const isInStock = currentSku ? currentSku.is_available : product.is_in_stock;
-  const displayPrice = currentSku?.price ?? product.price;
+  const isInStock = currentSku
+    ? currentSku.stock_status !== 'out_of_stock'
+    : product.is_in_stock;
+  const displayPrice = currentSku?.effective_price ?? product.price;
 
   return (
     <>
@@ -118,12 +135,22 @@ export default function ProductDetailPage() {
         <div className="grid gap-10 lg:grid-cols-2">
           {/* Images */}
           <div>
-            <div className="overflow-hidden rounded-xl bg-gray-100">
+            <div
+              className="overflow-hidden rounded-xl bg-gray-100 cursor-zoom-in"
+              onMouseMove={activeImage ? handleMouseMove : undefined}
+              onMouseLeave={activeImage ? handleMouseLeave : undefined}
+              onClick={() => activeImage && setLightboxOpen(true)}
+            >
               {activeImage ? (
                 <img
                   src={activeImage.image}
                   alt={activeImage.alt_text || product.title}
-                  className="h-full w-full object-contain"
+                  className="h-full w-full object-contain transition-transform duration-150"
+                  style={
+                    zoomOrigin
+                      ? { transform: 'scale(2)', transformOrigin: zoomOrigin }
+                      : undefined
+                  }
                 />
               ) : (
                 <div className="flex aspect-square items-center justify-center text-gray-300">
@@ -212,14 +239,14 @@ export default function ProductDetailPage() {
                       key={sku.id}
                       type="button"
                       onClick={() => setSelectedSkuId(sku.id)}
-                      disabled={!sku.is_available}
+                      disabled={sku.stock_status === 'out_of_stock'}
                       className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
                         selectedSkuId === sku.id || (!selectedSkuId && sku === skus[0])
                           ? 'border-upstream-500 bg-upstream-50 text-upstream-700'
                           : 'border-gray-300 text-gray-700 hover:border-gray-400'
                       } disabled:cursor-not-allowed disabled:opacity-40`}
                     >
-                      {Object.values(sku.attributes).join(' / ')}
+                      {sku.variant_label || sku.sku_code}
                     </button>
                   ))}
                 </div>
@@ -333,6 +360,31 @@ export default function ProductDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Lightbox modal */}
+      {lightboxOpen && activeImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(false)}
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+            aria-label="Close lightbox"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+          <img
+            src={activeImage.image}
+            alt={activeImage.alt_text || product.title}
+            className="max-h-[90vh] max-w-[90vw] object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </>
   );
 }

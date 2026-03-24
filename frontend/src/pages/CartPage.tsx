@@ -19,17 +19,18 @@ function CartLineItem({
   onUpdateQty: (id: number, qty: number) => void;
   isPending: boolean;
 }) {
-  const product = item.sku.product;
-  const image = product.primary_image;
+  const imageUrl = item.sku.primary_image_url || null;
+  const title = item.sku.product_title;
+  const slug = item.sku.product_slug;
 
   return (
     <li className="flex gap-4 py-4">
       {/* Thumbnail */}
       <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
-        {image ? (
+        {imageUrl ? (
           <img
-            src={image.image}
-            alt={image.alt_text || product.title}
+            src={imageUrl}
+            alt={title}
             className="h-full w-full object-cover"
           />
         ) : (
@@ -56,22 +57,18 @@ function CartLineItem({
       <div className="flex flex-1 flex-col">
         <div className="flex items-start justify-between gap-2">
           <Link
-            to={`/shop/product/${product.slug}`}
+            to={`/shop/product/${slug}`}
             className="text-sm font-medium text-gray-900 hover:text-upstream-700"
           >
-            {product.title}
+            {title}
           </Link>
           <span className="flex-shrink-0 text-sm font-semibold text-gray-900">
             ${item.line_total}
           </span>
         </div>
 
-        {Object.keys(item.sku.attributes).length > 0 && (
-          <p className="mt-0.5 text-xs text-gray-500">
-            {Object.entries(item.sku.attributes)
-              .map(([k, v]) => `${k}: ${v}`)
-              .join(', ')}
-          </p>
+        {item.sku.variant_label && (
+          <p className="mt-0.5 text-xs text-gray-500">{item.sku.variant_label}</p>
         )}
 
         <p className="mt-0.5 text-xs text-gray-400">Unit: ${item.unit_price}</p>
