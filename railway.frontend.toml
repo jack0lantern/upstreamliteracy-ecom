@@ -1,0 +1,8 @@
+# Set in Railway → frontend service → Settings → Config as code: railway.frontend.toml
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.frontend"
+watchPatterns = ["frontend/**", "Dockerfile.frontend", "railway.frontend.toml"]
+
+[deploy]
+restartPolicyType = "ON_FAILURE"

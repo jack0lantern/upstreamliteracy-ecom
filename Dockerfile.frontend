@@ -1,0 +1,17 @@
+# Vite SPA from monorepo root (Railway frontend service + RAILWAY_DOCKERFILE_PATH).
+# VITE_* vars must be set on the frontend service so they exist at `npm run build`.
+# bookworm-slim (glibc): Rollup/Vite optional @rollup/* native deps fail on alpine/musl with npm ci.
+FROM node:20-bookworm-slim AS build
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./
+# npm ci can skip Rollup platform binaries (optional deps); install explicitly for Linux/glibc.
+RUN npm ci && npm install @rollup/rollup-linux-x64-gnu --no-save
+COPY frontend/ .
+RUN npm run build
+
+FROM node:20-bookworm-slim
+WORKDIR /app
+RUN npm install -g serve@14
+COPY --from=build /app/dist ./dist
+EXPOSE 3000
+CMD ["sh", "-c", "serve -s dist -l tcp://0.0.0.0:${PORT:-3000}"]
