@@ -1,7 +1,11 @@
+import os
+
 from .base import *  # noqa: F401, F403
 
 DEBUG = False
-SECURE_SSL_REDIRECT = True
+# Railway health checks hit the container over HTTP; TLS is still terminated at the edge.
+_on_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT"))
+SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=not _on_railway)
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True

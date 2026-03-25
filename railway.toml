@@ -6,6 +6,6 @@ watchPatterns = ["backend/**"]
 
 [deploy]
 preDeployCommand = ["python manage.py migrate --noinput && python manage.py collectstatic --noinput"]
-healthcheckPath = "/health/"
+healthcheckPath = "/live/"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
