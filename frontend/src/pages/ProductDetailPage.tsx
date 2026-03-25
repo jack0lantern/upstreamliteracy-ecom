@@ -112,9 +112,9 @@ export default function ProductDetailPage() {
   return (
     <>
       <Helmet>
-        <title>{product.meta_title || product.title} – Upstream Literacy</title>
-        {product.meta_description && (
-          <meta name="description" content={product.meta_description} />
+        <title>{product.seo_title || product.title} – Upstream Literacy</title>
+        {product.seo_description && (
+          <meta name="description" content={product.seo_description} />
         )}
       </Helmet>
 
@@ -136,7 +136,7 @@ export default function ProductDetailPage() {
           {/* Images */}
           <div>
             <div
-              className="overflow-hidden rounded-xl bg-gray-100 cursor-zoom-in"
+              className="overflow-hidden rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 cursor-zoom-in"
               onMouseMove={activeImage ? handleMouseMove : undefined}
               onMouseLeave={activeImage ? handleMouseLeave : undefined}
               onClick={() => activeImage && setLightboxOpen(true)}
@@ -214,7 +214,7 @@ export default function ProductDetailPage() {
               </span>
             </div>
 
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+            <h1 className="font-heading text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
               {product.title}
             </h1>
 
@@ -255,7 +255,7 @@ export default function ProductDetailPage() {
 
             {/* Quantity + Add to cart */}
             <div className="mt-6 flex items-center gap-3">
-              <div className="flex items-center rounded-md border border-gray-300">
+              <div className="flex items-center rounded-lg border border-gray-300">
                 <button
                   type="button"
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
@@ -282,7 +282,11 @@ export default function ProductDetailPage() {
                 type="button"
                 onClick={handleAddToCart}
                 disabled={!isInStock || addItemMutation.isPending}
-                className="btn-primary flex-1"
+                className={`flex-1 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${
+                  isInStock
+                    ? 'bg-accent-500 text-white hover:bg-accent-600 hover:shadow-md'
+                    : 'bg-gray-200 text-gray-500'
+                }`}
               >
                 {addItemMutation.isPending
                   ? 'Adding…'
@@ -294,7 +298,7 @@ export default function ProductDetailPage() {
 
             {/* Specs */}
             {product.format_specs && product.format_specs.length > 0 && (
-              <dl className="mt-8 divide-y divide-gray-100 rounded-lg border border-gray-200">
+              <dl className="mt-8 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-gray-50/50">
                 {product.format_specs.map((spec) => (
                   <div key={spec.label} className="flex gap-4 px-4 py-3">
                     <dt className="w-32 flex-shrink-0 text-sm text-gray-500">{spec.label}</dt>
@@ -323,7 +327,7 @@ export default function ProductDetailPage() {
         {/* Full description */}
         {product.description && (
           <div className="mt-16">
-            <h2 className="mb-4 text-xl font-semibold text-gray-900">About this product</h2>
+            <h2 className="mb-4 font-heading text-xl font-semibold text-gray-900">About this product</h2>
             <div
               className="prose max-w-none text-gray-600"
               dangerouslySetInnerHTML={{ __html: product.description }}
@@ -334,7 +338,7 @@ export default function ProductDetailPage() {
         {/* Related products */}
         {product.related_products && product.related_products.length > 0 && (
           <div className="mt-16">
-            <h2 className="mb-6 text-xl font-semibold text-gray-900">You might also like</h2>
+            <h2 className="mb-6 font-heading text-xl font-semibold text-gray-900">You might also like</h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {product.related_products.slice(0, 4).map((rel) => (
                 <Link

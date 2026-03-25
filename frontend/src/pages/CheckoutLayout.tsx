@@ -8,7 +8,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { checkoutApi } from '@/lib/api/checkout';
-import { paymentsApi } from '@/lib/api/payments';
 import { cartApi } from '@/lib/api/cart';
 import { queryKeys } from '@/lib/queryKeys';
 import { useCheckoutStore } from '@/stores/checkoutStore';
@@ -449,7 +448,7 @@ function ReviewStep({ sessionToken }: { sessionToken: string }) {
           type="button"
           onClick={() => submitMutation.mutate()}
           disabled={submitMutation.isPending}
-          className="btn-primary"
+          className="btn-accent"
         >
           {submitMutation.isPending ? 'Placing order…' : 'Place Order'}
         </button>
@@ -493,7 +492,7 @@ export default function CheckoutLayout() {
       </Helmet>
 
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
-        <h1 className="mb-6 text-2xl font-bold tracking-tight text-gray-900">Checkout</h1>
+        <h1 className="mb-6 font-heading text-2xl font-bold tracking-tight text-gray-900">Checkout</h1>
 
         <StepIndicator currentStep={currentStep} />
 
