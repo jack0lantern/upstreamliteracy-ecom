@@ -16,6 +16,13 @@ RUN pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache
 
 COPY backend/ .
 
+# Bake static assets at build time (avoids shell chaining in Railway preDeploy).
+RUN SECRET_KEY=build-not-secret RAILWAY_ENVIRONMENT=production \
+    DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build \
+    REDIS_URL=redis://127.0.0.1:6379/0 \
+    DJANGO_SETTINGS_MODULE=config.settings.production \
+    python manage.py collectstatic --noinput
+
 EXPOSE 8000
 # Railway (and other hosts) set PORT; default 8000 for local docker-compose parity.
 CMD gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000}
