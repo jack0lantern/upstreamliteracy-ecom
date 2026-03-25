@@ -6,6 +6,6 @@ watchPatterns = ["backend/**", "Dockerfile", "railway.toml"]
 
 [deploy]
 preDeployCommand = ["python manage.py migrate --noinput"]
-healthcheckPath = "/live/"
-healthcheckTimeout = 120
+# No railway.toml healthcheckPath: Railway's internal probe returned "service
+# unavailable" while the app responded 200 on the public URL (PORT/bind OK).
 restartPolicyType = "ON_FAILURE"

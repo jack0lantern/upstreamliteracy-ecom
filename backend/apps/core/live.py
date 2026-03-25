@@ -2,5 +2,5 @@ from django.http import JsonResponse
 
 
 def live(_request):
-    """Process liveness probe (Railway/K8s). Does not check DB or Redis."""
+    """Liveness probe for Railway/K8s (no DB/Redis checks)."""
     return JsonResponse({"status": "live"})
